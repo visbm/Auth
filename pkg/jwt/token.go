@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,12 +40,11 @@ type Token struct {
 // AccessDetails ...
 type AccessDetails struct {
 	AccessUUID string `json:"accessUuid"`
-	UserID     uint64 `json:"userId"`
-	Role       string `json:"role"`
+	Username   string `json:"username"`
 }
 
 // CreateToken ...
-func CreateToken(login string) (*Token, error) {
+func CreateToken(username string) (*Token, error) {
 	token := &Token{}
 	token.AtExpires = time.Now().Add(time.Minute * 120).Unix() // Expire time of Access token
 	token.AccessUUID = uuid.NewV4().String()                   // Create a random RFC4122 version 4 UUID a cryptographically secure for Access token
@@ -60,7 +58,7 @@ func CreateToken(login string) (*Token, error) {
 	atClaims := jwt.MapClaims{}
 	atClaims["authorized"] = true
 	atClaims["access_uuid"] = token.AccessUUID
-	atClaims["login"] = login
+	atClaims["username"] = username
 	atClaims["exp"] = token.AtExpires
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	token.AccessToken, err = at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
@@ -72,7 +70,7 @@ func CreateToken(login string) (*Token, error) {
 	//Creating Refresh Token
 	rtClaims := jwt.MapClaims{}
 	rtClaims["refresh_uuid"] = token.RefreshUUID
-	atClaims["login"] = login
+	rtClaims["username"] = username
 	rtClaims["exp"] = token.RtExpires
 	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
 	token.RefreshToken, err = rt.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
@@ -94,24 +92,25 @@ func ExtractRefreshToken(r *http.Request) string {
 
 // ExtractAccessToken ...
 func ExtractAccessToken(r *http.Request) string {
-	bearToken := r.Header.Get("Authorization")
-	strArr := strings.Split(bearToken, " ")
-	if len(strArr) == 2 {
-		return strArr[1]
+	authHeader := r.Header.Get("Authorization")
+	headerParts := strings.Split(authHeader, " ")
+	if len(headerParts) == 2 {
+		return headerParts[1]
 	}
 	return ""
 }
 
 // VerifyToken ...
 func VerifyToken(r *http.Request) (*jwt.Token, error) {
-	tokenString := ExtractAccessToken(r)
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	accessToken := ExtractAccessToken(r)
+	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(os.Getenv("ACCESS_SECRET")), nil
 	})
 	if err != nil {
+		logger.Errorf("error occured while verify token. err: %w", err)
 		return nil, err
 	}
 	return token, nil
@@ -121,9 +120,11 @@ func VerifyToken(r *http.Request) (*jwt.Token, error) {
 func IsValid(r *http.Request) error {
 	token, err := VerifyToken(r)
 	if err != nil {
+		logger.Errorf("error occured while validation token. err: %w", err)
 		return err
 	}
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		logger.Errorf("error occured while validation token. err: %w", err)
 		return err
 	}
 	return nil
@@ -144,13 +145,7 @@ func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 			return nil, err
 		}
 
-		userID, err := strconv.ParseUint(fmt.Sprintf("%.f", claims["user_id"]), 10, 64)
-		if err != nil {
-			logger.Errorf("you are unauthorized. err: %w", err)
-			return nil, err
-		}
-
-		role := fmt.Sprint(claims["role"])
+		username := fmt.Sprintf("%s", claims["username"])
 		if err != nil {
 			logger.Errorf("you are unauthorized. err: %w", err)
 			return nil, err
@@ -158,76 +153,44 @@ func ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 
 		return &AccessDetails{
 			AccessUUID: accessUUID,
-			UserID:     userID,
-			Role:       role,
+			Username:   username,
 		}, nil
 	}
 	logger.Errorf("you are unauthorized. err: %w", err)
 	return nil, err
 }
 
-// CreateCustomToken ...
-func CreateCustomToken(payload map[string]interface{}, expireTime time.Duration, secretKey string) (string, error) {
-	if expireTime < 1 {
-		logger.Debugf("Bad request expire time: %v. Err msg: %v", expireTime, ErrBadRequest)
-		return "", fmt.Errorf("%v, expire time = %v", ErrBadRequest, expireTime)
-	}
+func RefreshToken(r *http.Request) (*Token, error) {
+	refreshToken := ExtractRefreshToken(r)
 
-	checkSecret := strings.ReplaceAll(secretKey, " ", "")
-	if checkSecret == "" {
-		logger.Debugf("Bad request secret key: %v. Err msg: %v", secretKey, ErrBadRequest)
-		return "", fmt.Errorf("%v, secret key: %v", ErrBadRequest, secretKey)
-	}
-
-	if len(payload) < 1 {
-		logger.Debugf("Bad request empty payload: %v. Err msg: %v", payload, ErrBadRequest)
-		return "", fmt.Errorf("%v, empty payload: %v", ErrBadRequest, payload)
-	}
-
-	claims := jwt.MapClaims{}
-	for key, element := range payload {
-		claims[key] = element
-	}
-	claims["exp"] = time.Now().Add(time.Minute * expireTime).Unix()
-
-	logger.Debugf("JWT.MapClaims created: %v", claims)
-
-	tk := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err := tk.SignedString([]byte(secretKey))
-
+	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("REFRESH_SECRET")), nil
+	})
 	if err != nil {
-		logger.Debugf("Error during complete signed token creating. Err msg: %v", err)
-		return "", err
-	}
-	return token, nil
-}
-
-// ParseCustomToken ...
-func ParseCustomToken(tokenStr, secretKey string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenStr,
-		func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				logger.Debugf("Unexpected signing method: %v", token.Header["alg"])
-				return nil, fmt.Errorf("%v. %v", ErrUnexpectedSigningMethod, token.Header["alg"])
-			}
-			return []byte(secretKey), nil
-		})
-	if err != nil {
-		logger.Debugf("Error during token parsing. Err msg: %v", err)
+		logger.Errorf("refresh token expired. Errors msg: %v", err)
 		return nil, err
 	}
-
-	_, ok := token.Claims.(jwt.Claims)
-	if !ok && !token.Valid {
-		logger.Debugf("Error during jwt.Claims creating. Err msg: %v", err)
+	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		logger.Errorf("you are unauthorized. err: %w", err)
 		return nil, err
 	}
-
+	var username string
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok && !token.Valid {
-		logger.Debugf("Error during jwt.MapClaims creating. Err msg: %v", err)
-		return nil, err
+	if ok && token.Valid {
+		username = fmt.Sprintf("%s", claims["username"])
+		if err != nil {
+			logger.Errorf("you are unauthorized. err: %w", err)
+			return nil, err
+		}
 	}
 
-	return claims, nil
+	newToken, err := CreateToken(username)
+	if err != nil {
+		logger.Errorf("error during createing tokens. Err msg: %w", err)
+		return nil, err
+	}
+	return newToken, nil
 }
