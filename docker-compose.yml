@@ -1,0 +1,65 @@
+version: '3.9'
+
+services:
+    sqlite3:
+        image: nouchka/sqlite3:latest
+        stdin_open: true
+        tty: true
+        volumes:
+            - database-data:/var/lib/sqllite3/data/
+        networks:
+            new:
+                aliases:
+                    - database
+    migrate:
+        image: migrate/migrate
+        restart: on-failure
+        volumes:
+            - ./migrations:/migrations
+
+        command:
+            [
+                "-path",
+                "/migrations",
+                "-database",
+                "postgres://user:userpass@postgresqldatabase:5432/goreact?sslmode=disable",
+                "up"
+            ]
+        links:
+            - postgresqldatabase
+        depends_on:
+            - postgresqldatabase
+        networks:
+            - new
+
+    auth:
+        build:
+            context: ./api
+        ports:
+            - 8080:8080
+        depends_on:
+            - postgresqldatabase
+        env_file:
+            - .env
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - POSTGRES_DB=${POSTGRES_DB}
+            - SERVER_HOST=0.0.0.0
+            - ENV=prod
+        tty: true
+        restart: on-failure
+        volumes:
+            - ./api/logs:/api/logs
+            - ./api/images:/api/images
+        networks:
+            - new
+
+networks:
+    new:
+        driver: bridge
+volumes:
+    test-database: null
+    api: null
+    database-data: null
+    pgadmin: null
