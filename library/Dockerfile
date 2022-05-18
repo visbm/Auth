@@ -5,7 +5,7 @@ RUN go version
 ENV GOPATH=/
 
 # Set destination for COPY
-WORKDIR /auth
+WORKDIR /library
 
 # build go app
 COPY ["go.mod", "go.sum", "./"] 
@@ -13,6 +13,6 @@ RUN go mod download
 
 COPY ./ ./
 
-RUN go build -o cmd ./main.go
+RUN go build -o cmd ./cmd/main.go
 
-CMD [ "./cmd" ]
+#CMD [ "./library" ]

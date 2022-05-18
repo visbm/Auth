@@ -67,7 +67,7 @@ func (ah *authHandler) Login(w http.ResponseWriter, r *http.Request, ps httprout
 	err = domain.CheckPasswordHash(login.Password, req.Password)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		ah.logger.Error(apperror.NewAppError("Error occured while chacking password", fmt.Sprintf("%d", http.StatusBadRequest), err.Error()))
+		ah.logger.Error(apperror.NewAppError("Error occured while checking password", fmt.Sprintf("%d", http.StatusBadRequest), err.Error()))
 		json.NewEncoder(w).Encode(apperror.NewAppError("wrong password", fmt.Sprintf("%d", http.StatusBadRequest), err.Error()))
 		return
 	}
@@ -88,9 +88,10 @@ func (ah *authHandler) Login(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 
 	http.SetCookie(w, &c)
+	w.Header().Set("Authorization", "Bearer "+tk.AccessToken)
+
 	w.WriteHeader(http.StatusOK)
 
-	w.Header().Set("Authorization", "Bearer "+tk.AccessToken)
 }
 
 func (ah *authHandler) Logout(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

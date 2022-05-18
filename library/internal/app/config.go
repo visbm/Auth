@@ -15,12 +15,9 @@ type Config struct {
 		Port int
 	}
 	SQLLite3DB struct {
-		Host     string
-		Port     int
+		Path     string
 		Username string
 		Password string
-		DbName   string
-		SSLMODE  string
 	}
 }
 
@@ -38,12 +35,9 @@ func (c *Config) NewConfig() {
 	c.Server.Port, _ = strconv.Atoi(os.Getenv("SERVER_PORT"))
 
 	
-	c.SQLLite3DB.Host = os.Getenv("SQLITE3_HOST")
-	c.SQLLite3DB.DbName = os.Getenv("SQLITE3_DB")
+	c.SQLLite3DB.Path = os.Getenv("SQLITE3_PATH")
 	c.SQLLite3DB.Username = os.Getenv("SQLITE3_USER")
 	c.SQLLite3DB.Password = os.Getenv("SQLITE3_PASSWORD")
-	c.SQLLite3DB.Port, _ = strconv.Atoi(os.Getenv("SQLITE3_PORT"))
-	c.SQLLite3DB.SSLMODE = os.Getenv("SQLITE3_SSLMODE")
 }
 
 func (c *Config) ServerAddress() string {
@@ -51,12 +45,9 @@ func (c *Config) ServerAddress() string {
 }
 func (c *Config) SQLLite3DataSourceName() string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		c.SQLLite3DB.Host,
-		c.SQLLite3DB.Port,
+		"%s?_auth&_auth_user=%s&_auth_pass=%s",
+		c.SQLLite3DB.Path,
 		c.SQLLite3DB.Username,
 		c.SQLLite3DB.Password,
-		c.SQLLite3DB.DbName,
-		c.SQLLite3DB.SSLMODE,
 	)
 }

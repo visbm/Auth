@@ -1,5 +1,4 @@
 version: '3.9'
-
 services:
     sqlite3:
         image: nouchka/sqlite3:latest
@@ -7,19 +6,19 @@ services:
         tty: true
         volumes:
             - ./database/sqlite3/data:/database/sqlite3/data
+        restart: on-failure
 
     migrate:
         image: migrate/migrate
         restart: on-failure
         volumes:
             - ./database/sqlite3/migrations:/database/sqlite3/migrations
-
         command:
             [
                 "-path",
                 "database/sqlite3/migrations",
                 "-database",
-                "sqlite3:/./cmd/db.sqlite/goreact?sslmode=disable",
+                "sqlite3://./database/sqlite3/data/db.sqlite?",
                 "up"
             ]
         links:
@@ -29,7 +28,7 @@ services:
 
     auth:
         build:
-            context: ./api
+            context: ./library
         ports:
             - 1111:8080
         depends_on:
@@ -42,10 +41,15 @@ services:
         tty: true
         restart: on-failure
         volumes:
-            - ./api/logs:/api/logs
+            - ./library/logs:/library/logs
         networks:
             - new
 
 networks:
     new:
         driver: bridge
+
+volumes:
+    database-data: null
+    images: null
+    logs: null

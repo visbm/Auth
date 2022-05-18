@@ -16,11 +16,11 @@ type Store struct {
 var (
 	// ErrNoRowsAffected ...
 	ErrNoRowsAffected = errors.New("no rows affected")
-	ErrUsernameExist = errors.New("username already exist")
+	ErrUsernameExist  = errors.New("username already exist")
 )
 
 func (s *Store) NewDB(source string, logger *logging.Logger) error {
-	db, err := sql.Open("sqlite3", "../../database/sqlite3/data/db.sqlite")
+	db, err := sql.Open("sqlite3", "../../"+source)
 	if err != nil {
 		logger.Fatal("Database falls", err)
 		return err
@@ -36,24 +36,6 @@ func (s *Store) NewDB(source string, logger *logging.Logger) error {
 	s.Logger = logger
 	s.DB = db
 	s.UserStorage = NewUserStorage(db, s.Logger)
-
-	/*k, err := db.Prepare(`CREATE TABLE IF NOT EXISTS users(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT,
-		password TEXT
-	  );`)
-	if err != nil {
-		logger.Error("Create table err ", err)
-	}
-	k.Exec()
-	defer k.Close()
-
-	_, err = k.Exec("INSERT INTO users (username, password) values ($1, $2)",
-		"admin", "admin")
-	if err != nil {
-		logger.Error("insert table err ", err)
-	}
-	k.Close()*/
 
 	return nil
 
