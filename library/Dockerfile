@@ -5,7 +5,7 @@ RUN go version
 ENV GOPATH=/
 
 # Set destination for COPY
-WORKDIR /api
+WORKDIR /auth
 
 # build go app
 COPY ["go.mod", "go.sum", "./"] 

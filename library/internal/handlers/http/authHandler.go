@@ -2,7 +2,6 @@ package http
 
 import (
 	"auth/domain"
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -58,7 +57,7 @@ func (ah *authHandler) Login(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	login, err := ah.Service.GetByUsername(context.Background(), req.Username)
+	login, err := ah.Service.GetByUsername(req.Username)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(apperror.NewAppError("Error occured while getting user", fmt.Sprintf("%d", http.StatusBadRequest), err.Error()))
@@ -190,10 +189,10 @@ func (ah *authHandler) Registration(w http.ResponseWriter, r *http.Request, ps h
 		return
 	}
 
-	uuid, err := ah.Service.Create(context.Background(), login)
+	uuid, err := ah.Service.Create(login)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(apperror.NewAppError("Error occured while registration", fmt.Sprintf("%d", http.StatusInternalServerError), err.Error()))
+		json.NewEncoder(w).Encode(apperror.NewAppError("Error occured while registration", fmt.Sprintf("%d", http.StatusBadRequest), err.Error()))
 		return
 	}
 

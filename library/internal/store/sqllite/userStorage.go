@@ -24,7 +24,9 @@ func (us *userStorage) GetByUsername(username string) (*domain.Login, error) {
 	var login domain.Login
 	if err := us.db.QueryRow("SELECT * FROM users WHERE username = $1",
 		username).Scan(
+		&login.UUID,
 		&login.Username,
+		&login.Password,
 	); err != nil {
 		us.logger.Errorf("error occurred while selecting users from DB. err: %v", err)
 		return nil, err
@@ -37,7 +39,9 @@ func (us *userStorage) GetByUUID(UUID string) (*domain.Login, error) {
 	var login domain.Login
 	if err := us.db.QueryRow("SELECT * FROM users WHERE uuid = $1",
 		UUID).Scan(
+		&login.UUID,
 		&login.Username,
+		&login.Password,
 	); err != nil {
 		us.logger.Errorf("error occurred while selecting users from DB. err: %v", err)
 		return nil, err
@@ -59,6 +63,7 @@ func (us *userStorage) GetAll(limit, offset int) ([]*domain.Login, error) {
 		err := rows.Scan(
 			&login.UUID,
 			&login.Username,
+			&login.Password,
 		)
 		if err != nil {
 			us.logger.Errorf("error occurred while selecting users. err: %v", err)
@@ -78,11 +83,22 @@ func (us *userStorage) Create(login *domain.Login) (string, error) {
 		return UUID, err
 	}
 
+	exist, err := us.CheckUsername(login.Username)
+	if err != nil {
+		us.logger.Errorf("error occurred while creating user. err: %v", err)
+		return UUID, err
+	}
+
+	if *exist {
+		us.logger.Errorf("username already exist")
+		return UUID, ErrUsernameExist
+	}
+
 	if err = us.db.QueryRow(
 		`INSERT INTO users (
                     username,
 					password
-		) VALUES ($1 , $2) RETURNING uuid`,
+		) VALUES ($1 , $2) RETURNING id`,
 		login.Username,
 		hashPass,
 	).Scan(
@@ -91,7 +107,7 @@ func (us *userStorage) Create(login *domain.Login) (string, error) {
 		us.logger.Errorf("error occurred while creating user. err: %v", err)
 		return UUID, err
 	}
-	us.logger.Errorf("%v", UUID)
+	us.logger.Info("%v", UUID)
 
 	return UUID, nil
 }
@@ -141,4 +157,16 @@ func (us *userStorage) Update(login *domain.Login) error {
 	}
 
 	return nil
+}
+
+//Checks if the username exists
+
+func (us *userStorage) CheckUsername(username string) (*bool, error) {
+	var idIsExist bool
+	err := us.db.QueryRow("SELECT EXISTS (SELECT username FROM users WHERE username = $1)", username).Scan(&idIsExist)
+	if err != nil {
+		us.logger.Errorf("Error occured while username checking. Err msg: %v", err)
+		return &idIsExist, err
+	}
+	return &idIsExist, nil
 }

@@ -25,7 +25,7 @@ type Config struct {
 }
 
 func (с Config) init() {
-	err := godotenv.Load("../.env")
+	err := godotenv.Load("../../.env")
 	if err != nil {
 		log.Print(err)
 	}
